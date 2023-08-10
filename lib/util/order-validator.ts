@@ -1,5 +1,6 @@
-import { DutchOrder, DutchOutput, OrderType, REACTOR_ADDRESS_MAPPING } from '@uniswap/uniswapx-sdk'
+import { DutchOrder, DutchOutput, OrderType } from '@uniswap/uniswapx-sdk'
 import { BigNumber } from 'ethers'
+import { REACTOR_ADDRESS_MAPPING } from '../overrides'
 import FieldValidator from './field-validator'
 
 export type OrderValidationResponse = {
@@ -91,6 +92,7 @@ export class OrderValidator {
   }
 
   private validateReactorAddress(reactor: string, chainId: number): OrderValidationResponse {
+    // @ts-expect-error
     if (reactor.toLowerCase() != REACTOR_ADDRESS_MAPPING[chainId][OrderType.Dutch].toLowerCase()) {
       return {
         valid: false,

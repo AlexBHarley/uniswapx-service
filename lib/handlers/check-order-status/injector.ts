@@ -1,8 +1,9 @@
-import { EventWatcher, OrderType, OrderValidator, REACTOR_ADDRESS_MAPPING } from '@uniswap/uniswapx-sdk'
+import { EventWatcher, OrderType, OrderValidator } from '@uniswap/uniswapx-sdk'
 import { MetricsLogger } from 'aws-embedded-metrics'
 import { DynamoDB } from 'aws-sdk'
 import { default as bunyan, default as Logger } from 'bunyan'
 import { ethers } from 'ethers'
+import { REACTOR_ADDRESS_MAPPING } from '../../overrides'
 import { BaseOrdersRepository } from '../../repositories/base'
 import { DynamoOrdersRepository } from '../../repositories/orders-repository'
 import { setGlobalMetrics } from '../../util/metrics'
@@ -10,12 +11,14 @@ import { BaseRInj, SfnInjector, SfnStateInputOutput } from '../base/index'
 
 export interface RequestInjected extends BaseRInj {
   chainId: number
+  fillChainId: number
   quoteId: string
   orderHash: string
   startingBlockNumber: number
   orderStatus: string
   getFillLogAttempts: number
   retryCount: number
+  fillChainProvider: ethers.providers.JsonRpcProvider
   provider: ethers.providers.JsonRpcProvider
   orderWatcher: EventWatcher
   orderQuoter: OrderValidator
@@ -45,23 +48,34 @@ export class CheckOrderStatusInjector extends SfnInjector<ContainerInjected, Req
       serializers: bunyan.stdSerializers,
     })
 
-    const chainId = event.chainId
-    const rpcURL = process.env[`RPC_${chainId}`]
-    const provider = new ethers.providers.JsonRpcProvider(rpcURL)
-    const quoter = new OrderValidator(provider, parseInt(chainId as string))
+    // Here we hardcode the
+    const orderChainId = event.chainId
+    const fillChainId = '5'
+    const orderChainRpc = process.env[`RPC_${orderChainId}`]
+    const fillChainRpc = process.env[`RPC_${fillChainId}`]
+    const orderChainProvider = new ethers.providers.JsonRpcProvider(orderChainRpc)
+    const fillChainProvider = new ethers.providers.JsonRpcProvider(fillChainRpc)
+
+    const quoter = new OrderValidator(fillChainProvider, parseInt(fillChainId))
     // TODO: use different reactor address for different order type
-    const watcher = new EventWatcher(provider, REACTOR_ADDRESS_MAPPING[chainId as number][OrderType.Dutch])
+    const watcher = new EventWatcher(
+      orderChainProvider,
+      // @ts-expect-error
+      REACTOR_ADDRESS_MAPPING[orderChainId][OrderType.Dutch]
+    )
 
     return {
       log,
-      chainId: event.chainId as number,
+      chainId: orderChainId as number,
+      provider: orderChainProvider,
+      fillChainId: parseInt(fillChainId),
+      fillChainProvider,
       orderHash: event.orderHash as string,
       quoteId: event.quoteId as string,
       startingBlockNumber: event.startingBlockNumber ? (event.startingBlockNumber as number) : 0,
       orderStatus: event.orderStatus as string,
       getFillLogAttempts: event.getFillLogAttempts ? (event.getFillLogAttempts as number) : 0,
       retryCount: event.retryCount ? (event.retryCount as number) : 0,
-      provider: provider,
       orderWatcher: watcher,
       orderQuoter: quoter,
     }

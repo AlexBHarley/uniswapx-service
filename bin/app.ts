@@ -1,17 +1,11 @@
 import * as cdk from 'aws-cdk-lib'
-import { CfnOutput, SecretValue, Stack, StackProps, Stage, StageProps } from 'aws-cdk-lib'
-import * as chatbot from 'aws-cdk-lib/aws-chatbot'
-import { BuildEnvironmentVariableType, BuildSpec, ComputeType } from 'aws-cdk-lib/aws-codebuild'
-import * as sm from 'aws-cdk-lib/aws-secretsmanager'
+import { CfnOutput, Stage, StageProps } from 'aws-cdk-lib'
 
-import { PipelineNotificationEvents } from 'aws-cdk-lib/aws-codepipeline'
-import { CodeBuildStep, CodePipeline, CodePipelineSource } from 'aws-cdk-lib/pipelines'
 import { Construct } from 'constructs'
 import dotenv from 'dotenv'
 import 'source-map-support/register'
 import { SUPPORTED_CHAINS } from '../lib/util/chain'
 import { STAGE } from '../lib/util/stage'
-import { PROD_INDEX_CAPACITY, PROD_TABLE_CAPACITY } from './config'
 import { SERVICE_NAME } from './constants'
 import { APIStack } from './stacks/api-stack'
 import { IndexCapacityConfig, TableCapacityConfig } from './stacks/dynamo-stack'
@@ -61,212 +55,212 @@ export class APIStage extends Stage {
   }
 }
 
-export class APIPipeline extends Stack {
-  constructor(scope: Construct, id: string, props?: StackProps) {
-    super(scope, id, props)
+// export class APIPipeline extends Stack {
+//   constructor(scope: Construct, id: string, props?: StackProps) {
+//     super(scope, id, props)
 
-    const code = CodePipelineSource.gitHub('Uniswap/uniswapx-service', 'main', {
-      authentication: SecretValue.secretsManager('github-token-2'),
-    })
+//     const code = CodePipelineSource.gitHub('Uniswap/uniswapx-service', 'main', {
+//       authentication: SecretValue.secretsManager('github-token-2'),
+//     })
 
-    const synthStep = new CodeBuildStep('Synth', {
-      input: code,
-      buildEnvironment: {
-        buildImage: cdk.aws_codebuild.LinuxBuildImage.STANDARD_6_0,
-        environmentVariables: {
-          NPM_TOKEN: {
-            value: 'npm-private-repo-access-token',
-            type: BuildEnvironmentVariableType.SECRETS_MANAGER,
-          },
-          GH_TOKEN: {
-            value: 'github-token-2',
-            type: BuildEnvironmentVariableType.SECRETS_MANAGER,
-          },
-          VERSION: {
-            value: '2',
-            type: BuildEnvironmentVariableType.PLAINTEXT,
-          },
-        },
-        computeType: ComputeType.LARGE,
-      },
-      commands: [
-        'git config --global url."https://${GH_TOKEN}@github.com/".insteadOf ssh://git@github.com/',
-        'echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc',
-        'yarn install --network-concurrency 1 --skip-integrity-check --check-cache',
-        'yarn build',
-        'npx cdk synth',
-      ],
-      partialBuildSpec: BuildSpec.fromObject({
-        phases: {
-          install: {
-            'runtime-versions': {
-              nodejs: '16',
-            },
-          },
-        },
-      }),
-    })
+//     const synthStep = new CodeBuildStep('Synth', {
+//       input: code,
+//       buildEnvironment: {
+//         buildImage: cdk.aws_codebuild.LinuxBuildImage.STANDARD_6_0,
+//         environmentVariables: {
+//           NPM_TOKEN: {
+//             value: 'npm-private-repo-access-token',
+//             type: BuildEnvironmentVariableType.SECRETS_MANAGER,
+//           },
+//           GH_TOKEN: {
+//             value: 'github-token-2',
+//             type: BuildEnvironmentVariableType.SECRETS_MANAGER,
+//           },
+//           VERSION: {
+//             value: '2',
+//             type: BuildEnvironmentVariableType.PLAINTEXT,
+//           },
+//         },
+//         computeType: ComputeType.LARGE,
+//       },
+//       commands: [
+//         'git config --global url."https://${GH_TOKEN}@github.com/".insteadOf ssh://git@github.com/',
+//         'echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc',
+//         'yarn install --network-concurrency 1 --skip-integrity-check --check-cache',
+//         'yarn build',
+//         'npx cdk synth',
+//       ],
+//       partialBuildSpec: BuildSpec.fromObject({
+//         phases: {
+//           install: {
+//             'runtime-versions': {
+//               nodejs: '16',
+//             },
+//           },
+//         },
+//       }),
+//     })
 
-    const pipeline = new CodePipeline(this, `${SERVICE_NAME}Pipeline`, {
-      // The pipeline name
-      pipelineName: `${SERVICE_NAME}`,
-      crossAccountKeys: true,
-      synth: synthStep,
-    })
+//     const pipeline = new CodePipeline(this, `${SERVICE_NAME}Pipeline`, {
+//       // The pipeline name
+//       pipelineName: `${SERVICE_NAME}`,
+//       crossAccountKeys: true,
+//       synth: synthStep,
+//     })
 
-    // Secrets are stored in secrets manager in the pipeline account. Accounts we deploy to
-    // have been granted permissions to access secrets via resource policies.
-    const jsonRpcProvidersSecret = sm.Secret.fromSecretAttributes(this, 'RPCProviderUrls', {
-      secretCompleteArn: 'arn:aws:secretsmanager:us-east-2:644039819003:secret:gouda-service-rpc-urls-2-9spgjc',
-    })
+//     // Secrets are stored in secrets manager in the pipeline account. Accounts we deploy to
+//     // have been granted permissions to access secrets via resource policies.
+//     const jsonRpcProvidersSecret = sm.Secret.fromSecretAttributes(this, 'RPCProviderUrls', {
+//       secretCompleteArn: 'arn:aws:secretsmanager:us-east-2:644039819003:secret:gouda-service-rpc-urls-2-9spgjc',
+//     })
 
-    const tenderlySecrets = sm.Secret.fromSecretAttributes(this, 'rpcTenderly', {
-      secretCompleteArn: 'arn:aws:secretsmanager:us-east-2:644039819003:secret:gouda-api-rpc-tenderly-Jh1BNl',
-    })
+//     const tenderlySecrets = sm.Secret.fromSecretAttributes(this, 'rpcTenderly', {
+//       secretCompleteArn: 'arn:aws:secretsmanager:us-east-2:644039819003:secret:gouda-api-rpc-tenderly-Jh1BNl',
+//     })
 
-    const resourceArnSecret = sm.Secret.fromSecretAttributes(this, 'firehoseArn', {
-      secretCompleteArn: 'arn:aws:secretsmanager:us-east-2:644039819003:secret:gouda-resource-arns-wF51FW',
-    })
+//     const resourceArnSecret = sm.Secret.fromSecretAttributes(this, 'firehoseArn', {
+//       secretCompleteArn: 'arn:aws:secretsmanager:us-east-2:644039819003:secret:gouda-resource-arns-wF51FW',
+//     })
 
-    const internalApiKey = sm.Secret.fromSecretAttributes(this, 'internal-api-key', {
-      secretCompleteArn: 'arn:aws:secretsmanager:us-east-2:644039819003:secret:uniswapx-internal-api-key-new-RaBmoM',
-    })
+//     const internalApiKey = sm.Secret.fromSecretAttributes(this, 'internal-api-key', {
+//       secretCompleteArn: 'arn:aws:secretsmanager:us-east-2:644039819003:secret:uniswapx-internal-api-key-new-RaBmoM',
+//     })
 
-    const jsonRpcUrls: { [chain: string]: string } = {}
-    Object.values(SUPPORTED_CHAINS).forEach((chainId) => {
-      const key = `RPC_${chainId}`
-      jsonRpcUrls[key] = jsonRpcProvidersSecret.secretValueFromJson(key).toString()
-    })
+//     const jsonRpcUrls: { [chain: string]: string } = {}
+//     Object.values(SUPPORTED_CHAINS).forEach((chainId) => {
+//       const key = `RPC_${chainId}`
+//       jsonRpcUrls[key] = jsonRpcProvidersSecret.secretValueFromJson(key).toString()
+//     })
 
-    new CfnOutput(this, 'jsonRpcUrls', {
-      value: JSON.stringify(jsonRpcUrls),
-    })
+//     new CfnOutput(this, 'jsonRpcUrls', {
+//       value: JSON.stringify(jsonRpcUrls),
+//     })
 
-    // Beta us-east-2
-    const betaUsEast2Stage = new APIStage(this, 'beta-us-east-2', {
-      env: { account: '321377678687', region: 'us-east-2' },
-      provisionedConcurrency: 2,
-      internalApiKey: internalApiKey.secretValue.toString(),
-      stage: STAGE.BETA,
-      envVars: {
-        ...jsonRpcUrls,
-        QUOTER_TENDERLY: tenderlySecrets.secretValueFromJson('QUOTER_TENDERLY').toString(),
-        DL_REACTOR_TENDERLY: tenderlySecrets.secretValueFromJson('DL_REACTOR_TENDERLY').toString(),
-        PERMIT2_TENDERLY: tenderlySecrets.secretValueFromJson('PERMIT2_TENDERLY').toString(),
-        FILL_EVENT_DESTINATION_ARN: resourceArnSecret.secretValueFromJson('FILL_EVENT_DESTINATION_ARN_BETA').toString(),
-        POSTED_ORDER_DESTINATION_ARN: resourceArnSecret.secretValueFromJson('POSTED_ORDER_DESTINATION_BETA').toString(),
-        THROTTLE_PER_FIVE_MINS: '3000',
-      },
-      tableCapacityConfig: {
-        order: { billingMode: cdk.aws_dynamodb.BillingMode.PAY_PER_REQUEST },
-        nonce: { billingMode: cdk.aws_dynamodb.BillingMode.PAY_PER_REQUEST },
-      },
-    })
+//     // Beta us-east-2
+//     const betaUsEast2Stage = new APIStage(this, 'beta-us-east-2', {
+//       env: { account: '321377678687', region: 'us-east-2' },
+//       provisionedConcurrency: 2,
+//       internalApiKey: internalApiKey.secretValue.toString(),
+//       stage: STAGE.BETA,
+//       envVars: {
+//         ...jsonRpcUrls,
+//         QUOTER_TENDERLY: tenderlySecrets.secretValueFromJson('QUOTER_TENDERLY').toString(),
+//         DL_REACTOR_TENDERLY: tenderlySecrets.secretValueFromJson('DL_REACTOR_TENDERLY').toString(),
+//         PERMIT2_TENDERLY: tenderlySecrets.secretValueFromJson('PERMIT2_TENDERLY').toString(),
+//         FILL_EVENT_DESTINATION_ARN: resourceArnSecret.secretValueFromJson('FILL_EVENT_DESTINATION_ARN_BETA').toString(),
+//         POSTED_ORDER_DESTINATION_ARN: resourceArnSecret.secretValueFromJson('POSTED_ORDER_DESTINATION_BETA').toString(),
+//         THROTTLE_PER_FIVE_MINS: '3000',
+//       },
+//       tableCapacityConfig: {
+//         order: { billingMode: cdk.aws_dynamodb.BillingMode.PAY_PER_REQUEST },
+//         nonce: { billingMode: cdk.aws_dynamodb.BillingMode.PAY_PER_REQUEST },
+//       },
+//     })
 
-    const betaUsEast2AppStage = pipeline.addStage(betaUsEast2Stage)
+//     const betaUsEast2AppStage = pipeline.addStage(betaUsEast2Stage)
 
-    this.addIntegTests(code, betaUsEast2Stage, betaUsEast2AppStage, STAGE.BETA)
+//     this.addIntegTests(code, betaUsEast2Stage, betaUsEast2AppStage, STAGE.BETA)
 
-    // Prod us-east-2
-    const prodUsEast2Stage = new APIStage(this, 'prod-us-east-2', {
-      env: { account: '316116520258', region: 'us-east-2' },
-      provisionedConcurrency: 5,
-      internalApiKey: internalApiKey.secretValue.toString(),
-      chatbotSNSArn: 'arn:aws:sns:us-east-2:644039819003:SlackChatbotTopic',
-      stage: STAGE.PROD,
-      envVars: {
-        ...jsonRpcUrls,
-        FILL_EVENT_DESTINATION_ARN: resourceArnSecret.secretValueFromJson('FILL_EVENT_DESTINATION_ARN_PROD').toString(),
-        POSTED_ORDER_DESTINATION_ARN: resourceArnSecret.secretValueFromJson('POSTED_ORDER_DESTINATION_PROD').toString(),
-        THROTTLE_PER_FIVE_MINS: '3000',
-      },
-      tableCapacityConfig: PROD_TABLE_CAPACITY,
-      indexCapacityConfig: PROD_INDEX_CAPACITY,
-    })
+//     // Prod us-east-2
+//     const prodUsEast2Stage = new APIStage(this, 'prod-us-east-2', {
+//       env: { account: '316116520258', region: 'us-east-2' },
+//       provisionedConcurrency: 5,
+//       internalApiKey: internalApiKey.secretValue.toString(),
+//       chatbotSNSArn: 'arn:aws:sns:us-east-2:644039819003:SlackChatbotTopic',
+//       stage: STAGE.PROD,
+//       envVars: {
+//         ...jsonRpcUrls,
+//         FILL_EVENT_DESTINATION_ARN: resourceArnSecret.secretValueFromJson('FILL_EVENT_DESTINATION_ARN_PROD').toString(),
+//         POSTED_ORDER_DESTINATION_ARN: resourceArnSecret.secretValueFromJson('POSTED_ORDER_DESTINATION_PROD').toString(),
+//         THROTTLE_PER_FIVE_MINS: '3000',
+//       },
+//       tableCapacityConfig: PROD_TABLE_CAPACITY,
+//       indexCapacityConfig: PROD_INDEX_CAPACITY,
+//     })
 
-    const prodUsEast2AppStage = pipeline.addStage(prodUsEast2Stage)
-    this.addIntegTests(code, prodUsEast2Stage, prodUsEast2AppStage, STAGE.PROD)
+//     const prodUsEast2AppStage = pipeline.addStage(prodUsEast2Stage)
+//     this.addIntegTests(code, prodUsEast2Stage, prodUsEast2AppStage, STAGE.PROD)
 
-    pipeline.buildPipeline()
+//     pipeline.buildPipeline()
 
-    const slackChannel = chatbot.SlackChannelConfiguration.fromSlackChannelConfigurationArn(
-      this,
-      'SlackChannel',
-      'arn:aws:chatbot::644039819003:chat-configuration/slack-channel/eng-ops-protocols-slack-chatbot'
-    )
+//     const slackChannel = chatbot.SlackChannelConfiguration.fromSlackChannelConfigurationArn(
+//       this,
+//       'SlackChannel',
+//       'arn:aws:chatbot::644039819003:chat-configuration/slack-channel/eng-ops-protocols-slack-chatbot'
+//     )
 
-    pipeline.pipeline.notifyOn('NotifySlack', slackChannel, {
-      events: [PipelineNotificationEvents.PIPELINE_EXECUTION_FAILED],
-    })
-  }
+//     pipeline.pipeline.notifyOn('NotifySlack', slackChannel, {
+//       events: [PipelineNotificationEvents.PIPELINE_EXECUTION_FAILED],
+//     })
+//   }
 
-  private addIntegTests(
-    sourceArtifact: cdk.pipelines.CodePipelineSource,
-    apiStage: APIStage,
-    applicationStage: cdk.pipelines.StageDeployment,
-    stage: STAGE
-  ) {
-    const testAction = new CodeBuildStep(`${SERVICE_NAME}-IntegTests-${apiStage.stageName}`, {
-      projectName: `${SERVICE_NAME}-IntegTests-${apiStage.stageName}`,
-      input: sourceArtifact,
-      envFromCfnOutputs: {
-        UNISWAP_API: apiStage.url,
-      },
-      buildEnvironment: {
-        buildImage: cdk.aws_codebuild.LinuxBuildImage.STANDARD_6_0,
-        computeType: ComputeType.MEDIUM,
-        environmentVariables: {
-          NPM_TOKEN: {
-            value: 'npm-private-repo-access-token',
-            type: BuildEnvironmentVariableType.SECRETS_MANAGER,
-          },
-          GH_TOKEN: {
-            value: 'github-token-2',
-            type: BuildEnvironmentVariableType.SECRETS_MANAGER,
-          },
-          UNISWAPX_SERVICE_URL: {
-            value: `${stage}/gouda-service/url`,
-            type: BuildEnvironmentVariableType.SECRETS_MANAGER,
-          },
-          RPC_5: {
-            value: 'all/gouda-service/integ-test/rpc',
-            type: BuildEnvironmentVariableType.SECRETS_MANAGER,
-          },
-          TEST_WALLET_PK: {
-            value: 'all/gouda-service/integ-test/test-wallet-pk',
-            type: BuildEnvironmentVariableType.SECRETS_MANAGER,
-          },
-          TEST_FILLER_PK: {
-            value: 'all/gouda-service/integ-test/test-filler-pk',
-            type: BuildEnvironmentVariableType.SECRETS_MANAGER,
-          },
-        },
-      },
-      commands: [
-        'git config --global url."https://${GH_TOKEN}@github.com/".insteadOf ssh://git@github.com/',
-        'echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc',
-        'echo "UNISWAP_API=${UNISWAP_API}" > .env',
-        'echo "RPC_5=${RPC_5}" > .env',
-        'echo "TEST_WALLET_PK=${TEST_WALLET_PK}" > .env',
-        'echo "TEST_FILLER_PK=${TEST_FILLER_PK}" > .env',
-        'yarn install --network-concurrency 1 --skip-integrity-check',
-        'yarn build',
-        'yarn run integ-test',
-      ],
-      partialBuildSpec: BuildSpec.fromObject({
-        phases: {
-          install: {
-            'runtime-versions': {
-              nodejs: '16',
-            },
-          },
-        },
-      }),
-    })
+//   private addIntegTests(
+//     sourceArtifact: cdk.pipelines.CodePipelineSource,
+//     apiStage: APIStage,
+//     applicationStage: cdk.pipelines.StageDeployment,
+//     stage: STAGE
+//   ) {
+//     const testAction = new CodeBuildStep(`${SERVICE_NAME}-IntegTests-${apiStage.stageName}`, {
+//       projectName: `${SERVICE_NAME}-IntegTests-${apiStage.stageName}`,
+//       input: sourceArtifact,
+//       envFromCfnOutputs: {
+//         UNISWAP_API: apiStage.url,
+//       },
+//       buildEnvironment: {
+//         buildImage: cdk.aws_codebuild.LinuxBuildImage.STANDARD_6_0,
+//         computeType: ComputeType.MEDIUM,
+//         environmentVariables: {
+//           NPM_TOKEN: {
+//             value: 'npm-private-repo-access-token',
+//             type: BuildEnvironmentVariableType.SECRETS_MANAGER,
+//           },
+//           GH_TOKEN: {
+//             value: 'github-token-2',
+//             type: BuildEnvironmentVariableType.SECRETS_MANAGER,
+//           },
+//           UNISWAPX_SERVICE_URL: {
+//             value: `${stage}/gouda-service/url`,
+//             type: BuildEnvironmentVariableType.SECRETS_MANAGER,
+//           },
+//           RPC_5: {
+//             value: 'all/gouda-service/integ-test/rpc',
+//             type: BuildEnvironmentVariableType.SECRETS_MANAGER,
+//           },
+//           TEST_WALLET_PK: {
+//             value: 'all/gouda-service/integ-test/test-wallet-pk',
+//             type: BuildEnvironmentVariableType.SECRETS_MANAGER,
+//           },
+//           TEST_FILLER_PK: {
+//             value: 'all/gouda-service/integ-test/test-filler-pk',
+//             type: BuildEnvironmentVariableType.SECRETS_MANAGER,
+//           },
+//         },
+//       },
+//       commands: [
+//         'git config --global url."https://${GH_TOKEN}@github.com/".insteadOf ssh://git@github.com/',
+//         'echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc',
+//         'echo "UNISWAP_API=${UNISWAP_API}" > .env',
+//         'echo "RPC_5=${RPC_5}" > .env',
+//         'echo "TEST_WALLET_PK=${TEST_WALLET_PK}" > .env',
+//         'echo "TEST_FILLER_PK=${TEST_FILLER_PK}" > .env',
+//         'yarn install --network-concurrency 1 --skip-integrity-check',
+//         'yarn build',
+//         'yarn run integ-test',
+//       ],
+//       partialBuildSpec: BuildSpec.fromObject({
+//         phases: {
+//           install: {
+//             'runtime-versions': {
+//               nodejs: '16',
+//             },
+//           },
+//         },
+//       }),
+//     })
 
-    applicationStage.addPost(testAction)
-  }
-}
+//     applicationStage.addPost(testAction)
+//   }
+// }
 
 // Local Dev Stack
 const app = new cdk.App()
@@ -300,6 +294,6 @@ new APIStack(app, `${SERVICE_NAME}Stack`, {
   },
 })
 
-new APIPipeline(app, `${SERVICE_NAME}PipelineStack`, {
-  env: { account: '644039819003', region: 'us-east-2' },
-})
+// new APIPipeline(app, `${SERVICE_NAME}PipelineStack`, {
+//   env: { account: '644039819003', region: 'us-east-2' },
+// })

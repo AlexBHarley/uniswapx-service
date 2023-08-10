@@ -1,0 +1,10 @@
+import { OrderType, REACTOR_ADDRESS_MAPPING as DEFAULT_REACTOR_ADDRESS_MAPPING } from '@uniswap/uniswapx-sdk'
+
+export const REACTOR_ADDRESS_MAPPING = {
+  ...DEFAULT_REACTOR_ADDRESS_MAPPING,
+  [420]: {
+    [OrderType.Dutch]: '0x86Eb5e059a62060a0dC35ebb5023a8AD09E1da45',
+  },
+}
+
+export const REMOTE_REACTOR = '0xb6d49231adb7864Ee2F5205d750665fE9Cba8F4f'

@@ -1,5 +1,5 @@
 import { SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn'
-import { DutchOrder, OrderType, OrderValidation } from '@uniswap/uniswapx-sdk'
+import { DutchOrder, OrderType } from '@uniswap/uniswapx-sdk'
 import { Unit } from 'aws-embedded-metrics'
 import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda'
 import Logger from 'bunyan'
@@ -48,7 +48,8 @@ export class PostOrderHandler extends APIGLambdaHandler<
     let decodedOrder: DutchOrder
 
     try {
-      decodedOrder = DutchOrder.parse(encodedOrder, chainId) as DutchOrder
+      const permit2 = chainId === 420 ? '0x000000000022d473030f116ddee9f6b43ac78ba3' : undefined
+      decodedOrder = DutchOrder.parse(encodedOrder, chainId, permit2) as DutchOrder
     } catch (e: unknown) {
       log.error(e, 'Failed to parse order')
       return {
@@ -66,23 +67,24 @@ export class PostOrderHandler extends APIGLambdaHandler<
         detail: validationResponse.errorString,
       }
     }
-    // onchain validation
-    const onchainValidator = onchainValidatorByChainId[chainId]
-    if (!onchainValidator) {
-      return {
-        statusCode: 500,
-        errorCode: ErrorCode.InternalError,
-        detail: `No onchain validator for chain ${chainId}`,
-      }
-    }
-    const validation = await onchainValidator.validate({ order: decodedOrder, signature: signature })
-    if (validation != OrderValidation.OK) {
-      return {
-        statusCode: 400,
-        errorCode: ErrorCode.InvalidOrder,
-        detail: `Onchain validation failed: ${OrderValidation[validation]}`,
-      }
-    }
+
+    // // onchain validation
+    // const onchainValidator = onchainValidatorByChainId[chainId]
+    // if (!onchainValidator) {
+    //   return {
+    //     statusCode: 500,
+    //     errorCode: ErrorCode.InternalError,
+    //     detail: `No onchain validator for chain ${chainId}`,
+    //   }
+    // }
+    // const validation = await onchainValidator.validate({ order: decodedOrder, signature: signature })
+    // if (validation != OrderValidation.OK) {
+    //   return {
+    //     statusCode: 400,
+    //     errorCode: ErrorCode.InvalidOrder,
+    //     detail: `Onchain validation failed: ${OrderValidation[validation]}`,
+    //   }
+    // }
 
     const order: OrderEntity = formatOrderEntity(decodedOrder, signature, OrderType.Dutch, ORDER_STATUS.OPEN, quoteId)
     const id = order.orderHash
@@ -214,7 +216,7 @@ const HIGH_MAX_OPEN_ORDERS_SWAPPERS: string[] = [
   '0xe001e6f6879c07b9ac24291a490f2795106d348c',
   '0x8943ea25bbfe135450315ab8678f2f79559f4630',
 ]
-export const DEFAULT_MAX_OPEN_ORDERS = 5
+export const DEFAULT_MAX_OPEN_ORDERS = 50
 export const HIGH_MAX_OPEN_ORDERS = 200
 
 // return the number of open orders the given offerer is allowed to have at a time

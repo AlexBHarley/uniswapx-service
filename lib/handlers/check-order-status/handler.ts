@@ -4,6 +4,7 @@ import { default as Logger } from 'bunyan'
 import { ethers } from 'ethers'
 import Joi from 'joi'
 import { ORDER_STATUS, SettledAmount } from '../../entities'
+import { REMOTE_REACTOR } from '../../overrides'
 import { checkDefined } from '../../preconditions/preconditions'
 import { BaseOrdersRepository } from '../../repositories/base'
 import { ChainId } from '../../util/chain'
@@ -22,6 +23,8 @@ export const FILL_EVENT_LOOKBACK_BLOCKS_ON = (chainId: ChainId): number => {
       return 10
     case ChainId.POLYGON:
       return 100
+    case ChainId.OPTIMISM_GOERLI:
+      return 1000
     default:
       return 10
   }
@@ -64,7 +67,10 @@ export class CheckOrderStatusHandler extends SfnLambdaHandler<ContainerInjected,
       'cannot find order by hash when updating order status'
     )
 
-    const parsedOrder = DutchOrder.parse(order.encodedOrder, chainId)
+    const permit2 = chainId === 420 ? '0x000000000022d473030f116ddee9f6b43ac78ba3' : undefined
+    const parsedOrder = DutchOrder.parse(order.encodedOrder, chainId, permit2)
+    parsedOrder.info.reactor = REMOTE_REACTOR
+
     log.info({ order: parsedOrder, signature: order.signature }, 'parsed order')
     const validation = await orderQuoter.validate({ order: parsedOrder, signature: order.signature })
     const curBlockNumber = await provider.getBlockNumber()
@@ -72,7 +78,10 @@ export class CheckOrderStatusHandler extends SfnLambdaHandler<ContainerInjected,
       ? curBlockNumber - FILL_EVENT_LOOKBACK_BLOCKS_ON(chainId)
       : startingBlockNumber
 
-    log.info({ validation: validation, curBlock: curBlockNumber, orderHash: order.orderHash }, 'validated order')
+    log.info(
+      { validation: validation, fromBlock, curBlock: curBlockNumber, orderHash: order.orderHash },
+      'validated order'
+    )
     switch (validation) {
       case OrderValidation.Expired: {
         // order could still be filled even when OrderQuoter.quote bubbled up 'expired' revert
